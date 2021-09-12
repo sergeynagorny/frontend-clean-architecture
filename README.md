@@ -1,46 +1,86 @@
-# Getting Started with Create React App
+# Frontend Clean Architecture
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## Things to Consider
 
-## Available Scripts
+There are a few compromises and simplifications in the code that are worth to be mentioned.
 
-In the project directory, you can run:
+### Shared Kernel
 
-### `yarn start`
+Shared Kernel is the code and data on which any modules can depend, but _only if this dependency would not increase coupling_. More details about the limitations and application are well described in the article ["DDD, Hexagonal, Onion, Clean, CQRS, ... How I put it all together"](https://herbertograca.com/2017/11/16/explicit-architecture-01-ddd-hexagonal-onion-clean-cqrs-how-i-put-it-all-together/).
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+In this application, the shared kernel includes global type annotations that can be accessed anywhere in the app and by any module. Such types are collected in [`shared-kernel.d.ts`](https://github.com/bespoyasov/frontend-clean-architecture/blob/master/src/shared-kernel.d.ts).
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+### Dependency in the Domain
 
-### `yarn test`
+The [`createOrder`](https://github.com/bespoyasov/frontend-clean-architecture/blob/master/src/domain/order.ts#L15) function uses the library-like function `currentDatetime` to specify the order creation date. This is not quite correct, because the domain should not depend on anything.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Ideally, the implementation of the `Order` type should accept all the necessary data, including the date, from outside. The creation of this entity would be in the application layer in `orderProducts`:
 
-### `yarn build`
+```ts
+async function orderProducts(user: User, { products }: Cart) {
+  const datetime = currentDatetime();
+  const order = new Order(user, products, datetime);
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+  // ...
+}
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### Use Case Testability
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+The order creation function [`orderProduct`](https://github.com/bespoyasov/frontend-clean-architecture/blob/master/src/application/orderProducts.ts#L24) itself is framework-independent right now and can't be used and tested in isolation from React. The hook wrapper though is only used to provide the use case to components and to inject services into the use case itself.
 
-### `yarn eject`
+In a canonical implementation, the function of the use case would be extracted outside the hook, and the services would be passed to the use case via a last argument or a DI:
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+```ts
+type Dependencies = {
+  notifier?: NotificationService;
+  payment?: PaymentService;
+  orderStorage?: OrderStorageService;
+};
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+async function orderProducts(
+  user: User,
+  cart: Cart,
+  dependencies: Dependencies = defaultDependencies
+) {
+  const { notifier, payment, orderStorage } = dependencies;
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+  // ...
+}
+```
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+Hook would then become an adapter:
 
-## Learn More
+```ts
+function useOrderProducts() {
+  const notifier = useNotifier();
+  const payment = usePayment();
+  const orderStorage = useOrdersStorage();
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+  return (user: User, cart: Cart) =>
+    orderProducts(user, cart, {
+      notifier,
+      payment,
+      orderStorage,
+    });
+}
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+In the sources, I thought it was unnecessary, as it would distract from the essence.
+
+### Crooked DI
+
+In the [application layer](https://github.com/bespoyasov/frontend-clean-architecture/blob/master/src/application/orderProducts.ts) we inject services by hand:
+
+```ts
+export function useAuthenticate() {
+  const storage: UserStorageService = useUserStorage();
+  const auth: AuthenticationService = useAuth();
+
+  // ...
+}
+```
+
+In a good way, this should be automated and done through the dependency injection. But in the case of React and hooks, we can use them as a “container” that returns an implementation of the specified interface.
+
+In this particular application, it didn't make much sense to set up the DI because it would distract from the main topic.
