@@ -1,4 +1,4 @@
-import { currentDatetime } from "../lib/datetime";
+import { currentDatetime } from "lib/datetime";
 import { Cart } from "./cart";
 import { totalPrice } from "./product";
 import { User } from "./user";
