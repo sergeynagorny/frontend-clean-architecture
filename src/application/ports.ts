@@ -1,6 +1,6 @@
-import { User, UserName } from "../domain/user";
-import { Cart } from "../domain/cart";
-import { Order } from "../domain/order";
+import { User, UserName } from "domain/user";
+import { Cart } from "domain/cart";
+import { Order } from "domain/order";
 
 export interface UserStorageService {
     user?: User
@@ -13,7 +13,7 @@ export interface CartStorageService {
     emptyCart(): void
 }
 
-export interface OrderStorageService {
+export interface OrdersStorageService {
     orders: Order[]
     updateOrders(orders: Order[]): void
 }
