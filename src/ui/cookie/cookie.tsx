@@ -2,16 +2,17 @@ import { contains } from "domain/cart";
 import { Product } from "domain/product";
 import { useAddToCart } from "application/add-to-cart";
 
-import { useStore } from "services/store";
 import styles from "./cookie.module.css";
 import { Toppings } from "./toppings";
+import { useCartStorage, useUserStorage } from "services/storage-adapter";
 
 type CookieProps = {
   cookie: Product;
 };
 
 export function Cookie({ cookie }: CookieProps) {
-  const { user, cart } = useStore();
+  const { user } = useUserStorage();
+  const { cart } = useCartStorage();
   const { addToCart } = useAddToCart();
 
   return (
